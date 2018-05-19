@@ -1,6 +1,184 @@
 /*! Built with http://stenciljs.com */
 (function(Context,namespace,hydratedCssClass,resourcesUrl,s){"use strict";
 s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.getAttribute('data-resources-url');}
+(function(resourcesUrl){
+    /** @stencil/router global **/
+
+    /**
+     * Copyright (c) 2013-present, Facebook, Inc.
+     *
+     * This source code is licensed under the MIT license found in the
+     * LICENSE file in the root directory of this source tree.
+     *
+     * @typechecks
+     *
+     */
+    var hasOwnProperty = Object.prototype.hasOwnProperty;
+    /**
+     * inlined Object.is polyfill to avoid requiring consumers ship their own
+     * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/is
+     */
+    function is(x, y) {
+        // SameValue algorithm
+        if (x === y) {
+            // Steps 1-5, 7-10
+            // Steps 6.b-6.e: +0 != -0
+            // Added the nonzero y check to make Flow happy, but it is redundant
+            return x !== 0 || y !== 0 || 1 / x === 1 / y;
+        }
+        else {
+            // Step 6.a: NaN == NaN
+            return x !== x && y !== y;
+        }
+    }
+    /**
+     * Performs equality by iterating through keys on an object and returning false
+     * when any key has values which are not strictly equal between the arguments.
+     * Returns true when the values of all keys are strictly equal.
+     */
+    function shallowEqual(objA, objB) {
+        if (is(objA, objB)) {
+            return true;
+        }
+        if (typeof objA !== 'object' || objA === null || typeof objB !== 'object' || objB === null) {
+            return false;
+        }
+        var keysA = Object.keys(objA);
+        var keysB = Object.keys(objB);
+        if (keysA.length !== keysB.length) {
+            return false;
+        }
+        // Test for A's keys different from B.
+        for (var i = 0; i < keysA.length; i++) {
+            if (!hasOwnProperty.call(objB, keysA[i]) || !is(objA[keysA[i]], objB[keysA[i]])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+    Context.activeRouter = (function () {
+        let state = {};
+        const nextListeners = [];
+        function getDefaultState() {
+            return {
+                location: {
+                    pathname: Context.window.location.pathname,
+                    search: Context.window.location.search
+                }
+            };
+        }
+        function set(value) {
+            state = Object.assign({}, state, value);
+            dispatch();
+        }
+        function get(attrName) {
+            if (Object.keys(state).length === 0) {
+                return getDefaultState();
+            }
+            if (!attrName) {
+                return state;
+            }
+            return state[attrName];
+        }
+        function dispatch() {
+            return __awaiter(this, void 0, void 0, function* () {
+                const listeners = nextListeners;
+                const matchList = [];
+                const pathname = get('location').pathname;
+                // Assume listeners are ordered by group and then groupIndex
+                for (let i = 0; i < listeners.length; i++) {
+                    let match = null;
+                    const isGroupMatch = matchList.some(me => {
+                        return me[1] != null && me[2] != null && me[2] === listeners[i].groupId;
+                    });
+                    // If listener has a groupId and group already has a match then don't check
+                    if (!isGroupMatch) {
+                        match = listeners[i].isMatch(pathname);
+                        // If listener does not have a group then just check if it matches
+                    }
+                    else {
+                        match = null;
+                    }
+                    if (!shallowEqual(listeners[i].lastMatch, match)) {
+                        if (!isGroupMatch && listeners[i].groupId) {
+                            matchList.unshift([i, match, listeners[i].groupId]);
+                        }
+                        else {
+                            matchList.push([i, match, listeners[i].groupId]);
+                        }
+                    }
+                    listeners[i].lastMatch = match;
+                }
+                for (const [listenerIndex, matchResult, groupId] of matchList) {
+                    if (groupId && matchResult != null) {
+                        yield listeners[listenerIndex].listener(matchResult);
+                    }
+                    else {
+                        listeners[listenerIndex].listener(matchResult);
+                    }
+                }
+            });
+        }
+        function addListener(routeSubscription) {
+            const pathname = get('location').pathname;
+            const match = routeSubscription.isMatch(pathname);
+            routeSubscription.lastMatch = match;
+            routeSubscription.listener(match);
+            // If the new route does not have a group then add to the end of the list
+            // If this is the first item push it on the list.
+            if (routeSubscription.groupId == null || routeSubscription.groupIndex == null || nextListeners.length === 0) {
+                nextListeners.push(routeSubscription);
+            }
+            else {
+                for (let i = 0; i < nextListeners.length; i++) {
+                    const { groupId, groupIndex } = nextListeners[i];
+                    if (groupId == null) {
+                        nextListeners.splice(i, 0, routeSubscription);
+                        break;
+                    }
+                    if (groupId === routeSubscription.groupId && groupIndex > routeSubscription.groupIndex) {
+                        nextListeners.splice(i, 0, routeSubscription);
+                        break;
+                    }
+                }
+            }
+        }
+        function removeListener(routeSubscription) {
+            const index = nextListeners.indexOf(routeSubscription);
+            nextListeners.splice(index, 1);
+        }
+        /**
+         * Subscribe to the router for changes
+         * The callback that is returned should be used to unsubscribe.
+         */
+        function subscribe(routeSubscription) {
+            addListener(routeSubscription);
+            let isSubscribed = true;
+            return function unsubscribe() {
+                if (!isSubscribed) {
+                    return;
+                }
+                removeListener(routeSubscription);
+                isSubscribed = false;
+            };
+        }
+        return {
+            set,
+            get,
+            subscribe,
+            dispatch
+        };
+    })();
+})(resourcesUrl);
 (function(window, document, Context, namespace) {
   'use strict';
   /**
@@ -381,7 +559,7 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
     // all is good, this component has been told it's time to finish loading
     // it's possible that we've already decided to destroy this element
     // check if this element has any actively loading child elements
-    if (!plt.hasLoadedMap.has(elm) && plt.instanceMap.get(elm) && !plt.isDisconnectedMap.has(elm) && (!elm['s-ld'] || !elm['s-ld'].length)) {
+    if (!plt.hasLoadedMap.has(elm) && (instance = plt.instanceMap.get(elm)) && !plt.isDisconnectedMap.has(elm) && (!elm['s-ld'] || !elm['s-ld'].length)) {
       // cool, so at this point this element isn't already being destroyed
       // and it does not have any child elements that are still loading
       // ensure we remove any child references cuz it doesn't matter at this point
@@ -399,7 +577,12 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
           onReadyCallbacks.forEach(cb => cb(elm));
           plt.onReadyCallbacksMap.delete(elm);
         }
-        false;
+        true;
+        // fire off the user's componentDidLoad method (if one was provided)
+        // componentDidLoad only runs ONCE, after the instance's element has been
+        // assigned as the host element, and AFTER render() has been called
+        // we'll also fire this method off on the element, just to
+        instance.componentDidLoad && instance.componentDidLoad();
       } catch (e) {
         plt.onError(e, 4 /* DidLoadError */ , elm);
       }
@@ -523,7 +706,10 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
         plt.activeRender = true;
         const vnodeChildren = instance.render && instance.render();
         let vnodeHostData;
-        false;
+        true;
+        // user component provided a "hostData()" method
+        // the returned data/attributes are used on the host element
+        vnodeHostData = instance.hostData && instance.hostData();
         false;
         // tell the platform we're done rendering
         // now any changes will again queue
@@ -611,7 +797,15 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
         // create the instance from the user's component class
         // https://www.youtube.com/watch?v=olLxrojmvMg
                 instance = initComponentInstance(plt, elm, plt.hostSnapshotMap.get(elm));
-        false;
+        true;
+        // fire off the user's componentWillLoad method (if one was provided)
+        // componentWillLoad only runs ONCE, after instance's element has been
+        // assigned as the host element, but BEFORE render() has been called
+        try {
+          instance.componentWillLoad && (userPromise = instance.componentWillLoad());
+        } catch (e) {
+          plt.onError(e, 3 /* WillLoadError */ , elm);
+        }
       } else {
         false;
       }
@@ -635,7 +829,11 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
         elm['s-init']();
         // componentDidLoad just fired off
             } else {
-        false;
+        true;
+        // fire off the user's componentDidUpdate method (if one was provided)
+        // componentDidUpdate runs AFTER render() has been called
+        // but only AFTER an UPDATE and not after the intial render
+        instance.componentDidUpdate && instance.componentDidUpdate();
         callNodeRefs(plt.vnodeMap.get(elm));
       }
     } catch (e) {
@@ -700,11 +898,20 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
       // add getter/setter to the component instance
       // these will be pointed to the internal data set from the above checks
             definePropertyGetterSetter(instance, memberName, getComponentProp, setComponentProp);
+    } else if (true, property.elementRef) {
+      // @Element()
+      // add a getter to the element reference using
+      // the member name the component meta provided
+      definePropertyValue(instance, memberName, elm);
     } else {
       false;
-      false;
-      false;
-      false;
+      if (true, property.context) {
+        // @Prop({ context: 'config' })
+        const contextObj = plt.getContextItem(property.context);
+        void 0 !== contextObj && definePropertyValue(instance, memberName, contextObj.getContext && contextObj.getContext(elm) || contextObj);
+      } else {
+        false;
+      }
     }
   }
   function setValue(plt, elm, memberName, newVal, values, instance, watchMethods) {
@@ -722,8 +929,18 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
       instance = plt.instanceMap.get(elm);
       if (instance) {
         // get an array of method names of watch functions to call
-        values[WATCH_CB_PREFIX + memberName];
-        false;
+        watchMethods = values[WATCH_CB_PREFIX + memberName];
+        if (true, watchMethods) {
+          // this instance is watching for when this property changed
+          for (let i = 0; i < watchMethods.length; i++) {
+            try {
+              // fire off each of the watch methods that are watching this property
+              instance[watchMethods[i]].call(instance, newVal, oldVal, memberName);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        }
         !plt.activeRender && elm['s-rn'] && 
         // looks like this value actually changed, so we've got work to do!
         // but only if we've already rendered, otherwise just chill out
@@ -1593,6 +1810,23 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
     // remove the queue now that the core file has initialized
         App.$r = null;
   }
+  function attributeChangedCallback(membersMeta, elm, attribName, oldVal, newVal, propName, memberMeta) {
+    // only react if the attribute values actually changed
+    if (membersMeta && oldVal !== newVal) {
+      // using the known component meta data
+      // look up to see if we have a property wired up to this attribute name
+      for (propName in membersMeta) {
+        memberMeta = membersMeta[propName];
+        // normalize the attribute name w/ lower case
+                if (memberMeta.attribName && toLowerCase(memberMeta.attribName) === toLowerCase(attribName)) {
+          // cool we've got a prop using this attribute name, the value will
+          // be a string, so let's convert it to the correct type the app wants
+          elm[propName] = parsePropertyValue(memberMeta.propType, newVal);
+          break;
+        }
+      }
+    }
+  }
   function useShadowDom(supportsNativeShadowDom, cmpMeta) {
     return supportsNativeShadowDom && 1 /* ShadowDom */ === cmpMeta.encapsulation;
   }
@@ -1703,7 +1937,13 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
       // remove all of this element's event, which is good
             plt.domApi.$removeEventListener(elm);
       plt.hasListenersMap.delete(elm);
-      false;
+      true;
+      // call instance componentDidUnload
+      // if we've created an instance for this
+      instance = plt.instanceMap.get(elm);
+      instance && 
+      // call the user's componentDidUnload if there is one
+      instance.componentDidUnload && instance.componentDidUnload();
       // clear any references to other elements
       // more than likely we've already deleted these references
       // but let's double check there pal
@@ -1748,7 +1988,12 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
       // coolsville, our host element has just hit the DOM
       connectedCallback(plt, cmpMeta, this);
     };
-    false;
+    true;
+    HostElementConstructor.attributeChangedCallback = function(attribName, oldVal, newVal) {
+      // the browser has just informed us that an attribute
+      // on the host element has changed
+      attributeChangedCallback(cmpMeta.membersMeta, this, attribName, oldVal, newVal);
+    };
     HostElementConstructor.disconnectedCallback = function() {
       // the element has left the builing
       disconnectedCallback(plt, this);
@@ -1867,7 +2112,19 @@ s=document.querySelector("script[data-namespace='app']");if(s){resourcesUrl=s.ge
         // initialize the members on the host element prototype
         // keep a ref to the metadata with the tag as the key
                 initHostElement(plt, cmpRegistry[cmpMeta.tagNameMeta] = cmpMeta, HostElementConstructor.prototype, hydratedCssClass);
-        false;
+        true;
+        {
+          // add which attributes should be observed
+          const observedAttributes = HostElementConstructor.observedAttributes = [];
+          // at this point the membersMeta only includes attributes which should
+          // be observed, it does not include all props yet, so it's safe to
+          // loop through all of the props (attrs) and observed them
+                    for (const propName in cmpMeta.membersMeta) {
+            cmpMeta.membersMeta[propName].attribName && observedAttributes.push(
+            // add this attribute to our array of attributes we need to observe
+            cmpMeta.membersMeta[propName].attribName);
+          }
+        }
         win.customElements.define(cmpMeta.tagNameMeta, HostElementConstructor);
       }
     }

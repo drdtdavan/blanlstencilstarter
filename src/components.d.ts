@@ -23,6 +23,8 @@ declare global {
   interface HTMLAttributes {}
 }
 
+import '@stencil/router';
+
 
 declare global {
 

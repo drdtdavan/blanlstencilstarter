@@ -11,6 +11,12 @@
     },
     "my-app": {
       "$": "my-app"
+    },
+    "stencil-route": {
+      "$": "my-app"
+    },
+    "stencil-router": {
+      "$": "my-app"
     }
   }
 }
